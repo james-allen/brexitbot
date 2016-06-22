@@ -117,7 +117,7 @@ class Bot(object):
 
     def get_region(self, tweet):
         if 'coordinates' in tweet and tweet['coordinates']:
-            coordinates = tweet['coordinates']
+            coordinates = tweet['coordinates']['coordinates']
         elif 'place' in tweet and tweet['place']:
             coordinates = np.mean(
                 tweet['place']['bounding_box']['coordinates'], (0, 1))
