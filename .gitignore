@@ -1,1 +1,4 @@
 *.pyc
+dropbox-creds.json
+twitter-creds.json
+brexit-tweets/
