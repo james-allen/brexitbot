@@ -31,6 +31,7 @@ try:
 except KeyError:
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
     print 'Using sqlite'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 class Tweet(db.Model):
