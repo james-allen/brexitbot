@@ -158,14 +158,32 @@ def classify_tweet(tweet):
         return result
     return 'failed'
 
+def load_creds(name, cred_names, path):
+    try:
+        creds = {
+            key: os.environ[(name + '_' + key).upper()]
+            for key in cred_names
+        }
+    except KeyError:
+        with open(path) as f_creds:
+            creds = json.load(f_creds)
+    return creds
+
+def load_twitter_creds():
+    cred_names = ('consumer_key', 'consumer_secret',
+                  'access_token', 'access_secret')
+    return load_creds('twitter', cred_names, 'twitter-creds.json')
+
+def load_dropbox_creds():
+    return load_creds('dropbox', ('token', ), 'dropbox-creds.json')
+
 class Bot(object):
 
     handle = 'thebrexitbot'
 
     def __init__(self):
         print 'Loading Twitter credentials'
-        with open('twitter-creds.json') as f_creds:
-            self.twitter_creds = json.load(f_creds)
+        self.twitter_creds = load_twitter_creds()
         print 'Connecting to Twitter'
         self.twitter_api = TwitterAPI(
             self.twitter_creds['consumer_key'],
@@ -417,8 +435,8 @@ class Bot(object):
         return name.format(idx)
 
     @staticmethod
-    def get_tweets_filename():
-        return time.strftime('tweets-%Y%m%d-%H%M%S.json')
+    def get_tweets_path():
+        return time.strftime('tweets-%Y%m%d-%H/tweets-%Y%m%d-%H%M%S.json')
 
     def write_to_dropbox(self, filename, contents):
         """Write a file to Dropbox."""
@@ -459,7 +477,7 @@ class Bot(object):
                         'text', 'gender', 'location')
             })
         tweets_json = tweets_df.T.to_json()
-        self.write_to_dropbox(self.get_tweets_filename(), tweets_json)
+        self.write_to_dropbox(self.get_tweets_path(), tweets_json)
         for tweet in tweets:
             db.session.delete(tweet)
         db.session.commit()
