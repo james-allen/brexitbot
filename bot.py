@@ -14,13 +14,13 @@ from matplotlib.path import Path
 import numpy as np
 from requests.exceptions import ChunkedEncodingError
 
-from coord_converter import OSGB36toWGS84
+# from coord_converter import OSGB36toWGS84
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 
-from pydrive.auth import GoogleAuth
-from pydrive.drive import GoogleDrive
+# from pydrive.auth import GoogleAuth
+# from pydrive.drive import GoogleDrive
 
 import dropbox
 
@@ -539,3 +539,5 @@ class Bot(object):
         params = {'track': track}
         return self.twitter_api.request('statuses/filter', params)
 
+if __name__ == '__main__':
+    Bot().run()
