@@ -1,0 +1,13 @@
+{
+    "ny19": {
+        "teachout": ["#imwithzephyr", "#voteteachout"],
+        "faso": ["#teamfaso"]
+    },
+    "president": {
+        "clinton": ["#voteclinton", "#votehillaryclinton", "#republicansforhillary", "#hillaryforpresident",
+                    "#imwithher", "#imwithher2016", "#nevertrump", "#stoptrump"],
+        "trump": ["#hillaryindictment", "#neverhillary", "#crookedhillary", "#trump2016", "#draintheswamp",
+                  "#lockherup", "#trumpnow", "#trumpsarmy"]
+    }
+
+}
