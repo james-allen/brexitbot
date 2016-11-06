@@ -441,8 +441,7 @@ class Bot(object):
     def write_to_dropbox(self, filename, contents):
         """Write a file to Dropbox."""
         print 'Loading Dropbox credentials'
-        with open('dropbox-creds.json') as f_creds:
-            token = json.load(f_creds)['token']
+        token = load_dropbox_creds()['token']
         dbx = dropbox.Dropbox(token)
         print 'Uploading to Dropbox'
         if not filename.startswith('/'):
