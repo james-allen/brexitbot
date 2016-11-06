@@ -40,7 +40,7 @@ class Tweet(db.Model):
     category = db.Column(db.String(50))
     sentiment = db.Column(db.String(50))
     handle = db.Column(db.Unicode(100))
-    text = db.Column(db.Unicode(140))
+    text = db.Column(db.Unicode(500))
     gender = db.Column(db.String(1))
     location = db.Column(db.String(100))
 
