@@ -319,7 +319,7 @@ class Bot(object):
                     self.add_to_db(category, cat_result, tweet, gender, region)
                     if (Tweet.query.count() % 100) == 0:
                         print Tweet.query.count(), 'tweets'
-                    if Tweet.query.count() >= 1000:
+                    if Tweet.query.count() >= 5000:
                         self.dump_tweets()
 
     def add_to_db(self, category, cat_result, tweet, gender, region):
