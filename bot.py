@@ -367,7 +367,7 @@ class Bot(object):
         if tweet['user']['screen_name'] != 'j_t_allen':
             print "Don't want to talk to", tweet['user']['screen_name']
             return
-        pattern_count = '[Cc]ount (?P<group_name>.+) (?P<group_value>.+)'
+        pattern_count = '[Cc]ount (?P<group_name>.+)? (?P<group_value>.+)?'
         request_count = re.search(pattern_count, tweet['text'])
         if request_count:
             group_name = request_count.group('group_name').lower()
