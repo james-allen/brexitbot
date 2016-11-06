@@ -25,7 +25,12 @@ from flask_sqlalchemy import SQLAlchemy
 import dropbox
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
+try:
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
+    print 'Using database specified in environment variable'
+except KeyError:
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
+    print 'Using sqlite'
 db = SQLAlchemy(app)
 
 class Tweet(db.Model):
