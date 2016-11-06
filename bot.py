@@ -160,6 +160,8 @@ def classify_tweet(tweet):
 
 class Bot(object):
 
+    handle = 'thebrexitbot'
+
     def __init__(self):
         print 'Loading Twitter credentials'
         with open('twitter-creds.json') as f_creds:
@@ -282,14 +284,14 @@ class Bot(object):
         return 'other'
 
     def process_tweet(self, tweet):
+        if '@thebrexitbot' in tweet['text']:
+            self.converse(tweet)
         result = classify_tweet(tweet)
         if isinstance(result, dict):
             region = self.get_region(tweet)
             gender = self.get_gender(tweet)
             for category, cat_result in result.items():
                 if cat_result['sentiment'] is not None:
-                    # print u'{}: {}: {}'.format(category, cat_result['sentiment'], cat_result['text'])
-                    # print
                     self.add_to_db(category, cat_result, tweet, gender, region)
                     if (Tweet.query.count() % 100) == 0:
                         print Tweet.query.count(), 'tweets'
@@ -335,6 +337,29 @@ class Bot(object):
                 entry = MODELS[key].query.filter_by(**kwargs).first()
             entry.n_tweet += 1
         db.session.commit()
+
+    def converse(self, tweet):
+        """Process a tweet to the bot and reply if necessary."""
+        if tweet['user']['screen_name'] != 'j_t_allen':
+            print "Don't want to talk to", tweet['user']['screen_name']
+            return
+        pattern_count = '[Cc]ount (?P<group_name>.+) (?P<group_value>.+)'
+        request_count = re.search(pattern_count, tweet['text'])
+        if request_count:
+            group_name = request_count.group('group_name').lower()
+            group_value = request_count.group('group_value')
+            result = self.get_n_tweet(group_name, group_value)
+            text = '@' + tweet['user']['screen_name'] + ' ' + ' '.join(
+                '{}: {}'.format(sentiment.title(), n_tweet)
+                for sentiment, n_tweet in result.items())
+            self.post_tweet(text)
+
+    def get_n_tweet(self, group_name, group_value):
+        kwargs = {'category': 'president', group_name: group_value}
+        rows = MODELS[group_name].query.filter_by(**kwargs)
+        result = {row.sentiment: row.n_tweet for row in rows}
+        return result
+
 
 
     # def next_timestamp(self):
@@ -472,7 +497,7 @@ class Bot(object):
                             'group_value': group_value,
                             'n_tweet': n_tweet,
                         }
-        return results
+        return results.fillna('unknown')
 
     def run(self):
         while True:
@@ -510,6 +535,7 @@ class Bot(object):
         for category in HASHTAGS.values():
             for sentiment in category.values():
                 all_hashtags.extend(sentiment)
-        params = {'track': ','.join(all_hashtags)}
+        track = ','.join(all_hashtags + ['@'+self.handle])
+        params = {'track': track}
         return self.twitter_api.request('statuses/filter', params)
 
