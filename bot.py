@@ -126,7 +126,6 @@ MODELS = {
     'date_time': CountDateTime,
     'location': CountLocation,
     'gender': CountGender,
-    'result': ResultLocation,
 }
 
 ALL_MODELS = (CountDateTime, CountLocation, CountGender, ResultLocation,
@@ -413,7 +412,7 @@ class Bot(object):
                 '{}: {}'.format(sentiment.title(), n_tweet)
                 for sentiment, n_tweet in result.items())
             self.post_tweet(text)
-        pattern_result = r'[Rr]esult (?P<location>.+?) (?P<sentiment>.+?) (?P<result>.+?)\b'
+        pattern_result = r'[Rr]esult (?P<location>.+?) (?P<sentiment>.+?) (?P<result>\d+(\.\d+)?)\b'
         match_result = re.search(pattern_result, tweet['text'])
         if match_result and tweet['user']['screen_name'] == 'j_t_allen':
             location = match_result.group('location').upper()
@@ -570,7 +569,7 @@ class Bot(object):
     #             float(results.n_in.sum() + results.n_out.sum()))
 
     def results_df(self):
-        columns = ('category', 'sentiment', 'group_name', 'group_value', 'n_tweet')
+        columns = ('category', 'sentiment', 'group_name', 'group_value', 'n_tweet', 'result')
         results = pd.DataFrame(columns=columns)
         for category in self.in_db:
             for sentiment in self.in_db[category]:
@@ -582,14 +581,23 @@ class Bot(object):
                             group_name: group_value
                         }
                         n_tweet = MODELS[group_name].query.filter_by(**kwargs).first().n_tweet
-                        results.loc[len(results)] = {
+                        row = {
                             'category': category,
                             'sentiment': sentiment,
                             'group_name': group_name,
                             'group_value': group_value,
                             'n_tweet': n_tweet,
+                            'result': np.nan
                         }
-        return results.fillna('unknown')
+                        if group_name == 'location':
+                            true_result = ResultLocation.query.filter_by(
+                                category=category, sentiment=sentiment,
+                                location=group_value).first()
+                            if true_result is not None:
+                                row['result'] = true_result.result
+                        results.loc[len(results)] = row
+        results['group_value'] = results['group_value'].fillna('unknown')
+        return results
 
     def run(self):
         while True:
