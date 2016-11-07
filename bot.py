@@ -29,7 +29,7 @@ try:
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
     print 'Using database specified in environment variable'
 except KeyError:
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
     print 'Using sqlite'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
@@ -83,6 +83,19 @@ class CountLocation(db.Model):
         self.sentiment = sentiment
         self.n_tweet = 0
 
+class FinalCountLocation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    location = db.Column(db.String(100))
+    category = db.Column(db.String(50))
+    sentiment = db.Column(db.String(50))
+    n_tweet = db.Column(db.Integer)
+
+    def __init__(self, location, category, sentiment, n_tweet):
+        self.location = location
+        self.category = category
+        self.sentiment = sentiment
+        self.n_tweet = n_tweet
+
 class ResultLocation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     location = db.Column(db.String(100))
@@ -115,6 +128,9 @@ MODELS = {
     'gender': CountGender,
     'result': ResultLocation,
 }
+
+ALL_MODELS = (CountDateTime, CountLocation, CountGender, ResultLocation,
+              FinalCountLocation, Tweet)
 
 with open('hashtags.json') as f_h:
     HASHTAGS = json.load(f_h)
@@ -187,7 +203,7 @@ class Bot(object):
 
     handle = 'thebrexitbot'
 
-    def __init__(self):
+    def __init__(self, test=False):
         print 'Loading Twitter credentials'
         self.twitter_creds = load_twitter_creds()
         print 'Connecting to Twitter'
@@ -198,17 +214,20 @@ class Bot(object):
             self.twitter_creds['access_secret'])
         print 'Loading regions'
         self.regions = self.load_regions_us()
+        print 'Checking if database has been initialised'
+        for model in ALL_MODELS:
+            model.__table__.create(db.session.bind, checkfirst=True)
+        self.in_db = self.check_db_contents()
+        self.final_count_recorded = np.unique(
+            [r.location for r in FinalCountLocation.query.all()
+             if r.location not in (None, 'other')])
+        self.cutoff_times = self.load_cutoff_times()
+        self.next_cutoff = self.get_next_cutoff()
+        print 'Time to next polls closing: {:.2f} hrs'.format(
+            (self.next_cutoff - datetime.now()).total_seconds() / 3600.0)
         print 'Loading names'
         self.gender_detector = GenderDetector()
-        print 'Checking if database has been initialised'
-        try:
-            Tweet.query.first()
-        except:
-            print 'Initialising database'
-            db.create_all()
-        else:
-            print 'Database already initialised'
-        self.in_db = self.check_db_contents()
+        self.test = test
 
     @staticmethod
     def load_regions_uk():
@@ -261,6 +280,18 @@ class Bot(object):
                                      [-190.0, 50.0],
                                      [-141.0, 50.0]]))
         return points_list
+
+    @staticmethod
+    def load_cutoff_times():
+        with open('cutoff-times.json') as f_in:
+            cutoff_times = json.load(f_in)
+        cutoff_times = {key: datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+                        for key, value in cutoff_times.items()}
+        return cutoff_times
+
+    def get_next_cutoff(self):
+        next_cutoff = min([t for t in self.cutoff_times.values() if t > datetime.now()])
+        return next_cutoff
 
     @staticmethod
     def check_db_contents():
@@ -321,6 +352,9 @@ class Bot(object):
                         print Tweet.query.count(), 'tweets'
                     if Tweet.query.count() >= 5000:
                         self.dump_tweets()
+            # Check if we need to close any polls
+            if self.get_next_cutoff < datetime.now():
+                self.close_polls()
 
     def add_to_db(self, category, cat_result, tweet, gender, region):
         tweet_entry = Tweet(
@@ -386,6 +420,26 @@ class Bot(object):
         result = {row.sentiment: row.n_tweet for row in rows}
         return result
 
+    def close_polls(self):
+        """Record final counts in closed states."""
+        for state, cutoff in self.cutoff_times.items():
+            if state not in self.final_count_recorded and cutoff < datetime.now():
+                self.final_count_recorded = np.hstack((self.final_count_recorded, state))
+                for category in self.in_db:
+                    for sentiment in self.in_db[category]:
+                        kwargs = {
+                            'category': category,
+                            'sentiment': sentiment,
+                            'location': state
+                        }
+                        result = MODELS['location'].query.filter_by(**kwargs).first()
+                        if result is not None:
+                            print 'adding', state, category, sentiment, result.n_tweet
+                            entry = FinalCountLocation(
+                                state, category, sentiment, result.n_tweet)
+                            db.session.add(entry)
+        db.session.commit()
+
 
 
     # def next_timestamp(self):
@@ -431,7 +485,8 @@ class Bot(object):
     def post_tweet(self, text):
         print '{} characters'.format(len(text))
         print text
-        self.twitter_api.request('statuses/update', {'status': text})
+        if not self.test:
+            self.twitter_api.request('statuses/update', {'status': text})
 
     @staticmethod
     def get_next_filename():
@@ -484,7 +539,8 @@ class Bot(object):
                         'text', 'gender', 'location')
             })
         tweets_json = tweets_df.T.to_json()
-        self.write_to_dropbox(self.get_tweets_path(), tweets_json)
+        if not self.test:
+            self.write_to_dropbox(self.get_tweets_path(), tweets_json)
         for tweet in tweets:
             db.session.delete(tweet)
         db.session.commit()
