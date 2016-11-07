@@ -436,38 +436,52 @@ class Bot(object):
         # if tweet['user']['screen_name'] != 'j_t_allen':
         #     print "Don't want to talk to", tweet['user']['screen_name']
         #     return
-        pattern_count = r'[Cc]ount (?P<group_name>.+?) (?P<group_value>.+?)\b'
+        pattern_me = r'@[Tt][Hh][Ee][Bb][Rr][Ee][Xx][Ii][Tt][Bb][Oo][Tt]'
+        pattern_count = pattern_me + r' [Cc]ount (?P<group_name>.+?) (?P<group_value>.+?)\b'
         match_count = re.search(pattern_count, tweet['text'])
         if match_count:
             group_name = match_count.group('group_name').lower()
             group_value = match_count.group('group_value')
             self.summarise('president', group_name, group_value,
                            at=tweet['user']['screen_name'])
-        pattern_result = r'[Rr]esult (?P<location>.+?) (?P<sentiment>.+?) (?P<result>\d+(\.\d+)?)\b'
+        pattern_result = pattern_me + r' [Rr]esult (?P<location>.+?) (?P<sentiment>.+?) (?P<result>\d+(\.\d+)?)\b'
         match_result = re.search(pattern_result, tweet['text'])
         if match_result and tweet['user']['screen_name'] == 'j_t_allen':
             location = match_result.group('location').upper()
             sentiment = match_result.group('sentiment').lower()
             result = float(match_result.group('result'))
+            success = self.add_result(location, sentiment, result)
+            if success:
+                self.post_tweet('Confirm: {} {} {}'.format(location, sentiment, result), at='j_t_allen')
+            else:
+                self.post_tweet('?! Try something like: result NY clinton 62.1', at='j_t_allen')
+
+    @staticmethod
+    def add_result(location, sentiment, result):
+        if (CountLocation.query.filter_by(location=location).count() and
+                CountLocation.query.filter_by(sentiment=sentiment).count()):
             entry = ResultLocation(location, 'president', sentiment, result)
             db.session.add(entry)
             db.session.commit()
-            self.post_tweet('Confirm: {} {} {}'.format(location, sentiment, result), at='j_t_allen')
+            return True
+        else:
+            return False
 
     def summarise(self, category, group_name, group_value, at=None):
         result = self.get_tweet_frac(category, group_name, group_value)
-        if group_name == 'gender':
-            screen_value = ' for ' + {'M': 'men', 'F': 'women'}[group_value]
-        elif group_name:
-            screen_value = ' for ' + group_value
-        else:
-            screen_value = ''
-        header = 'Twitter sentiment at {}{}: '.format(
-            datetime.now().strftime('%H:%M'), screen_value)
-        text = header + ' '.join(
-            '{}: {:.1%}'.format(sentiment.title(), frac)
-            for sentiment, frac in result.items())
-        self.post_tweet(text, at=at)
+        if result:
+            if group_name == 'gender':
+                screen_value = ' for ' + {'M': 'men', 'F': 'women'}[group_value]
+            elif group_name:
+                screen_value = ' for ' + group_value
+            else:
+                screen_value = ''
+            header = 'Twitter sentiment at {}{}: '.format(
+                datetime.now().strftime('%H:%M'), screen_value)
+            text = header + ' '.join(
+                '{}: {:.1%}'.format(sentiment.title(), frac)
+                for sentiment, frac in result.items())
+            self.post_tweet(text, at=at)
 
     def predict(self, state, at=None):
         prediction = self.get_prediction(state)
@@ -524,10 +538,12 @@ class Bot(object):
                 if row.sentiment not in result:
                     result[row.sentiment] = 0
                 result[row.sentiment] += row.n_tweet
-        else:
+        elif group_name in MODELS:
             kwargs = {'category': category, group_name: group_value}
             rows = MODELS[group_name].query.filter_by(**kwargs)
             result = {row.sentiment: row.n_tweet for row in rows}
+        else:
+            result = {}
         return result
 
     def close_polls(self):
