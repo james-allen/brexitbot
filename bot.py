@@ -402,10 +402,10 @@ class Bot(object):
         #     print "Don't want to talk to", tweet['user']['screen_name']
         #     return
         pattern_count = r'[Cc]ount (?P<group_name>.+?) (?P<group_value>.+?)\b'
-        request_count = re.search(pattern_count, tweet['text'])
-        if request_count:
-            group_name = request_count.group('group_name').lower()
-            group_value = request_count.group('group_value')
+        match_count = re.search(pattern_count, tweet['text'])
+        if match_count:
+            group_name = match_count.group('group_name').lower()
+            group_value = match_count.group('group_value')
             print group_name, group_value
             result = self.get_n_tweet(group_name, group_value)
             print result
@@ -413,6 +413,17 @@ class Bot(object):
                 '{}: {}'.format(sentiment.title(), n_tweet)
                 for sentiment, n_tweet in result.items())
             self.post_tweet(text)
+        pattern_result = r'[Rr]esult (?P<location>.+?) (?P<sentiment>.+?) (?P<result>.+?)\b'
+        match_result = re.search(pattern_result, tweet['text'])
+        if match_result and tweet['user']['screen_name'] == 'j_t_allen':
+            location = match_result.group('location').upper()
+            sentiment = match_result.group('sentiment').lower()
+            result = float(match_result.group('result'))
+            entry = ResultLocation(location, 'president', sentiment, result)
+            db.session.add(entry)
+            db.session.commit()
+            self.post_tweet('@j_t_allen Confirm: {} {} {}'.format(location, sentiment, result))
+
 
     def get_n_tweet(self, group_name, group_value):
         kwargs = {'category': 'president', group_name: group_value}
