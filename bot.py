@@ -372,7 +372,9 @@ class Bot(object):
         if request_count:
             group_name = request_count.group('group_name').lower()
             group_value = request_count.group('group_value')
+            print group_name, group_value
             result = self.get_n_tweet(group_name, group_value)
+            print result
             text = '@' + tweet['user']['screen_name'] + ' ' + ' '.join(
                 '{}: {}'.format(sentiment.title(), n_tweet)
                 for sentiment, n_tweet in result.items())
