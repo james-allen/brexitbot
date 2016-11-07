@@ -414,14 +414,21 @@ class Bot(object):
             self.summarise('president', 'gender', 'M')
         else:
             # Tweet about a state
-            all_states = list(np.unique(
+            results_states = list(np.unique(
+                [r.location for r in ResultLocation.query.all()
+                 if r.location and r.location != 'other']))
+            active_states = list(np.unique(
                 [r.location for r in CountLocation.query.all()
-                if r.location and r.location != 'other']))
+                 if r.location and r.location != 'other'
+                 and r.location not in results_states]))
             if self.last_state is None:
-                state = all_states[0]
+                state = active_states[0]
             else:
-                state = all_states[(all_states.index(self.last_state) + 1) % len(all_states)]
+                state = active_states[(active_states.index(self.last_state) + 1)
+                                      % len(active_states)]
             self.summarise('president', 'location', state)
+            if len(results_states) >= 3:
+                self.predict(state)
             self.last_state = state
 
     def converse(self, tweet):
@@ -541,6 +548,11 @@ class Bot(object):
                             entry = FinalCountLocation(
                                 state, category, sentiment, result.n_tweet)
                             db.session.add(entry)
+                            if self.test:
+                                # Put in fake results
+                                fake = result.n_tweet * (0.9 + 0.2*np.random.rand())
+                                text = '@thebrexitbot result {} {} {}'.format(state, sentiment, fake)
+                                self.converse({'user': {'screen_name': 'j_t_allen'}, 'text': text})
         db.session.commit()
         self.next_cutoff = self.get_next_cutoff()
 
@@ -696,6 +708,12 @@ class Bot(object):
         return results
 
     def run(self):
+        if self.test:
+            print 'Running in test mode'
+            for key in self.cutoff_times.keys()[:10]:
+                self.cutoff_times[key] = datetime.now() + timedelta(seconds=20.0)
+            self.next_cutoff = self.get_next_cutoff()
+            self.cadence = timedelta(seconds=10.0)
         while True:
             try:
                 stream = self.open_stream()
