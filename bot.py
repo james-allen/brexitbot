@@ -226,7 +226,7 @@ class Bot(object):
             (self.next_cutoff - datetime.now()).total_seconds() / 3600.0)
         print 'Loading names'
         self.gender_detector = GenderDetector()
-        self.cadence = timedelta(seconds=10.0)
+        self.cadence = timedelta(seconds=20.0)
         self.last_tweet = datetime.now() - self.cadence
         self.last_state = None
         self.test = test
