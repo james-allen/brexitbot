@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 from glob import glob
 import re
@@ -226,6 +226,9 @@ class Bot(object):
             (self.next_cutoff - datetime.now()).total_seconds() / 3600.0)
         print 'Loading names'
         self.gender_detector = GenderDetector()
+        self.cadence = timedelta(seconds=10.0)
+        self.last_tweet = datetime.now() - self.cadence
+        self.last_state = None
         self.test = test
 
     @staticmethod
@@ -354,6 +357,10 @@ class Bot(object):
             # Check if we need to close any polls
             if self.next_cutoff < datetime.now():
                 self.close_polls()
+            # Check if it's time to tweet
+            if (datetime.now() - self.last_tweet) > self.cadence:
+                self.tweet_something()
+                self.last_tweet = datetime.now()
 
     def add_to_db(self, category, cat_result, tweet, gender, region):
         tweet_entry = Tweet(
@@ -395,6 +402,28 @@ class Bot(object):
             entry.n_tweet += 1
         db.session.commit()
 
+    def tweet_something(self):
+        """Tweet something interesting."""
+        decision = np.random.rand()
+        if decision < 0.05:
+            # Tweet about the overall position
+            self.summarise('president', None, None)
+        elif decision < 0.1:
+            # Tweet about gender
+            self.summarise('president', 'gender', 'F')
+            self.summarise('president', 'gender', 'M')
+        else:
+            # Tweet about a state
+            all_states = list(np.unique(
+                [r.location for r in CountLocation.query.all()
+                if r.location and r.location != 'other']))
+            if self.last_state is None:
+                state = all_states[0]
+            else:
+                state = all_states[(all_states.index(self.last_state) + 1) % len(all_states)]
+            self.summarise('president', 'location', state)
+            self.last_state = state
+
     def converse(self, tweet):
         """Process a tweet to the bot and reply if necessary."""
         # if tweet['user']['screen_name'] != 'j_t_allen':
@@ -421,10 +450,12 @@ class Bot(object):
     def summarise(self, category, group_name, group_value, at=None):
         result = self.get_tweet_frac(category, group_name, group_value)
         if group_name == 'gender':
-            screen_value = {'M': 'men', 'F': 'women'}[group_value]
+            screen_value = ' for ' + {'M': 'men', 'F': 'women'}[group_value]
+        elif group_name:
+            screen_value = ' for ' + group_value
         else:
-            screen_value = group_value
-        header = 'Twitter sentiment at {} for {}: '.format(
+            screen_value = ''
+        header = 'Twitter sentiment at {}{}: '.format(
             datetime.now().strftime('%H:%M'), screen_value)
         text = header + ' '.join(
             '{}: {:.1%}'.format(sentiment.title(), frac)
@@ -479,9 +510,17 @@ class Bot(object):
                 for sentiment, n_this in n_tweet.items()}
 
     def get_n_tweet(self, category, group_name, group_value):
-        kwargs = {'category': category, group_name: group_value}
-        rows = MODELS[group_name].query.filter_by(**kwargs)
-        result = {row.sentiment: row.n_tweet for row in rows}
+        if group_name is None:
+            rows = MODELS['gender'].query.all()
+            result = {}
+            for row in rows:
+                if row.sentiment not in result:
+                    result[row.sentiment] = 0
+                result[row.sentiment] += row.n_tweet
+        else:
+            kwargs = {'category': category, group_name: group_value}
+            rows = MODELS[group_name].query.filter_by(**kwargs)
+            result = {row.sentiment: row.n_tweet for row in rows}
         return result
 
     def close_polls(self):
