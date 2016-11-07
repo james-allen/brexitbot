@@ -405,13 +405,8 @@ class Bot(object):
         if match_count:
             group_name = match_count.group('group_name').lower()
             group_value = match_count.group('group_value')
-            print group_name, group_value
-            result = self.get_n_tweet(group_name, group_value)
-            print result
-            text = '@' + tweet['user']['screen_name'] + ' ' + ' '.join(
-                '{}: {}'.format(sentiment.title(), n_tweet)
-                for sentiment, n_tweet in result.items())
-            self.post_tweet(text)
+            self.summarise('president', group_name, group_value,
+                           at=tweet['user']['screen_name'])
         pattern_result = r'[Rr]esult (?P<location>.+?) (?P<sentiment>.+?) (?P<result>\d+(\.\d+)?)\b'
         match_result = re.search(pattern_result, tweet['text'])
         if match_result and tweet['user']['screen_name'] == 'j_t_allen':
@@ -423,9 +418,29 @@ class Bot(object):
             db.session.commit()
             self.post_tweet('@j_t_allen Confirm: {} {} {}'.format(location, sentiment, result))
 
+    def summarise(self, category, group_name, group_value, at=None):
+        result = self.get_tweet_frac(category, group_name, group_value)
+        if group_name == 'gender':
+            screen_value = {'M': 'men', 'F': 'women'}[group_value]
+        else:
+            screen_value = group_value
+        header = 'Twitter sentiment at {} for {}: '.format(
+            datetime.now().strftime('%H:%M'), screen_value)
+        text = header + ' '.join(
+            '{}: {:.1%}'.format(sentiment.title(), frac)
+            for sentiment, frac in result.items())
+        if at:
+            text = '@' + at + ' ' + text
+        self.post_tweet(text)
 
-    def get_n_tweet(self, group_name, group_value):
-        kwargs = {'category': 'president', group_name: group_value}
+    def get_tweet_frac(self, category, group_name, group_value):
+        n_tweet = self.get_n_tweet(category, group_name, group_value)
+        n_all = float(np.sum(n_tweet.values()))
+        return {sentiment: n_this / n_all
+                for sentiment, n_this in n_tweet.items()}
+
+    def get_n_tweet(self, category, group_name, group_value):
+        kwargs = {'category': category, group_name: group_value}
         rows = MODELS[group_name].query.filter_by(**kwargs)
         result = {row.sentiment: row.n_tweet for row in rows}
         return result
