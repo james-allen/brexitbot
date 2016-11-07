@@ -511,7 +511,7 @@ class Bot(object):
 
     def get_n_tweet(self, category, group_name, group_value):
         if group_name is None:
-            rows = MODELS['gender'].query.all()
+            rows = MODELS['gender'].query.filter_by(category=category)
             result = {}
             for row in rows:
                 if row.sentiment not in result:
