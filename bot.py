@@ -443,7 +443,7 @@ class Bot(object):
             group_name = match_count.group('group_name').lower()
             group_value = match_count.group('group_value')
             self.summarise('president', group_name, group_value,
-                           at=tweet['user']['screen_name'])
+                           in_reply_to=tweet)
         pattern_result = pattern_me + r' [Rr]esult (?P<location>.+?) (?P<sentiment>.+?) (?P<result>\d+(\.\d+)?)\b'
         match_result = re.search(pattern_result, tweet['text'])
         if match_result and tweet['user']['screen_name'] == 'j_t_allen':
@@ -452,9 +452,9 @@ class Bot(object):
             result = float(match_result.group('result'))
             success = self.add_result(location, sentiment, result)
             if success:
-                self.post_tweet('Confirm: {} {} {}'.format(location, sentiment, result), at='j_t_allen')
+                self.post_tweet('Confirm: {} {} {}'.format(location, sentiment, result), in_reply_to=tweet)
             else:
-                self.post_tweet('?! Try something like: result NY clinton 62.1', at='j_t_allen')
+                self.post_tweet('?! Try something like: result NY clinton 62.1', in_reply_to=tweet)
 
     @staticmethod
     def add_result(location, sentiment, result):
@@ -467,7 +467,7 @@ class Bot(object):
         else:
             return False
 
-    def summarise(self, category, group_name, group_value, at=None):
+    def summarise(self, category, group_name, group_value, in_reply_to=None):
         result = self.get_tweet_frac(category, group_name, group_value)
         if result:
             if group_name == 'gender':
@@ -481,21 +481,21 @@ class Bot(object):
             text = header + ' '.join(
                 '{}: {:.1%}'.format(sentiment.title(), frac)
                 for sentiment, frac in result.items())
-            self.post_tweet(text, at=at)
+            self.post_tweet(text, in_reply_to=in_reply_to)
 
-    def predict(self, state, at=None):
+    def predict(self, state, in_reply_to=None):
         prediction = self.get_prediction(state)
         header = 'Predicted result at {} for {}: '.format(
             datetime.now().strftime('%H:%M'), state)
         text = header + ' '.join(
             '{}: {:.1%}'.format(sentiment.title(), frac)
             for sentiment, frac in prediction.items())
-        self.post_tweet(text, at=at)
+        self.post_tweet(text, in_reply_to=in_reply_to)
 
     def get_prediction(self, state):
         tweet_frac = self.get_tweet_frac('president', 'location', state)
         if len(tweet_frac) == 0:
-            self.post_tweet('No results for '+state, at=at)
+            self.post_tweet('No results for '+state, in_reply_to=in_reply_to)
             return
         all_results = ResultLocation.query.all()
         all_results = [r for r in all_results if r.location and r.location != 'other']
@@ -614,13 +614,18 @@ class Bot(object):
     #         json.dump(self.tweets, f_out)
     #     self.tweets = []
 
-    def post_tweet(self, text, at=None):
-        if at:
-            text = '@' + at + ' ' + text
+    def post_tweet(self, text, in_reply_to=None):
+        if in_reply_to:
+            text = '@' + in_reply_to['user']['screen_name'] + ' ' + text
         print '{} characters'.format(len(text))
         print text
+        if in_reply_to:
+            print in_reply_to['id']
+        payload = {'status': text}
+        if in_reply_to:
+            payload['in_reply_to_status_id'] = in_reply_to['id']
         if not self.test:
-            self.twitter_api.request('statuses/update', {'status': text})
+            self.twitter_api.request('statuses/update', payload)
 
     @staticmethod
     def get_next_filename():
