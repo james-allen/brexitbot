@@ -364,9 +364,9 @@ class Bot(object):
 
     def converse(self, tweet):
         """Process a tweet to the bot and reply if necessary."""
-        if tweet['user']['screen_name'] != 'j_t_allen':
-            print "Don't want to talk to", tweet['user']['screen_name']
-            return
+        # if tweet['user']['screen_name'] != 'j_t_allen':
+        #     print "Don't want to talk to", tweet['user']['screen_name']
+        #     return
         pattern_count = r'[Cc]ount (?P<group_name>.+?) (?P<group_value>.+?)\b'
         request_count = re.search(pattern_count, tweet['text'])
         if request_count:
