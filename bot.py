@@ -416,7 +416,7 @@ class Bot(object):
             entry = ResultLocation(location, 'president', sentiment, result)
             db.session.add(entry)
             db.session.commit()
-            self.post_tweet('@j_t_allen Confirm: {} {} {}'.format(location, sentiment, result))
+            self.post_tweet('Confirm: {} {} {}'.format(location, sentiment, result), at='j_t_allen')
 
     def summarise(self, category, group_name, group_value, at=None):
         result = self.get_tweet_frac(category, group_name, group_value)
@@ -429,9 +429,48 @@ class Bot(object):
         text = header + ' '.join(
             '{}: {:.1%}'.format(sentiment.title(), frac)
             for sentiment, frac in result.items())
-        if at:
-            text = '@' + at + ' ' + text
-        self.post_tweet(text)
+        self.post_tweet(text, at=at)
+
+    def predict(self, state, at=None):
+        prediction = self.get_prediction(state)
+        header = 'Predicted result at {} for {}: '.format(
+            datetime.now().strftime('%H:%M'), state)
+        text = header + ' '.join(
+            '{}: {:.1%}'.format(sentiment.title(), frac)
+            for sentiment, frac in prediction.items())
+        self.post_tweet(text, at=at)
+
+    def get_prediction(self, state):
+        tweet_frac = self.get_tweet_frac('president', 'location', state)
+        if len(tweet_frac) == 0:
+            self.post_tweet('No results for '+state, at=at)
+            return
+        all_results = ResultLocation.query.all()
+        all_results = [r for r in all_results if r.location and r.location != 'other']
+        states_with_results = np.unique([r.location for r in all_results])
+        all_sentiments = np.unique([r.sentiment for r in all_results])
+        results_table = pd.DataFrame(index=states_with_results, columns=all_sentiments)
+        tweets_table = results_table.copy()
+        for row in all_results:
+            results_table.loc[row.location, row.sentiment] = row.result
+            final_count = FinalCountLocation.query.filter_by(
+                category='president', location=row.location, sentiment=row.sentiment).first()
+            tweets_table.loc[row.location, row.sentiment] = float(final_count.n_tweet) if final_count else 0.0
+        keep = np.all(np.isfinite(results_table.values.astype(float)), axis=1)
+        results_table = results_table[keep]
+        tweets_table = tweets_table[keep]
+        tweets_table.values[tweets_table.values == 0] = 1    # To avoid divide by zero errors
+        results_ratio = (results_table[results_table.columns[0]].values /
+                         results_table[results_table.columns[1]].values)
+        tweets_ratio = (tweets_table[tweets_table.columns[0]].values /
+                        tweets_table[tweets_table.columns[1]].values)
+        weight = np.sqrt(tweets_table.sum(1).values)
+        slope = np.sum(weight * results_ratio / tweets_ratio) / np.sum(weight)
+        tweet_frac = [tweet_frac.get(c, 0.0) for c in results_table.columns]
+        predicted_ratio = slope * tweet_frac[0] / tweet_frac[1]
+        prediction = np.array([predicted_ratio / (1 + predicted_ratio), 1 / (1 + predicted_ratio)])
+        prediction = {c: p for c, p in zip(results_table.columns, prediction)}
+        return prediction
 
     def get_tweet_frac(self, category, group_name, group_value):
         n_tweet = self.get_n_tweet(category, group_name, group_value)
@@ -507,7 +546,9 @@ class Bot(object):
     #         json.dump(self.tweets, f_out)
     #     self.tweets = []
 
-    def post_tweet(self, text):
+    def post_tweet(self, text, at=None):
+        if at:
+            text = '@' + at + ' ' + text
         print '{} characters'.format(len(text))
         print text
         if not self.test:
