@@ -352,7 +352,7 @@ class Bot(object):
                     if Tweet.query.count() >= 5000:
                         self.dump_tweets()
             # Check if we need to close any polls
-            if self.get_next_cutoff < datetime.now():
+            if self.next_cutoff < datetime.now():
                 self.close_polls()
 
     def add_to_db(self, category, cat_result, tweet, gender, region):
@@ -503,6 +503,7 @@ class Bot(object):
                                 state, category, sentiment, result.n_tweet)
                             db.session.add(entry)
         db.session.commit()
+        self.next_cutoff = self.get_next_cutoff()
 
 
 
