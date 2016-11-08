@@ -226,7 +226,7 @@ class Bot(object):
             (self.next_cutoff - datetime.now()).total_seconds() / 3600.0)
         print 'Loading names'
         self.gender_detector = GenderDetector()
-        self.cadence = timedelta(seconds=20.0)
+        self.cadence = timedelta(seconds=120.0)
         self.last_tweet = datetime.now() - self.cadence
         self.last_state = None
         self.test = test
@@ -357,6 +357,11 @@ class Bot(object):
             # Check if we need to close any polls
             if self.next_cutoff < datetime.now():
                 self.close_polls()
+                # Increase tweeting rate when things get more interesting
+                if self.test:
+                    self.cadence = timedelta(seconds=5.0)
+                else:
+                    self.cadence = timedelta(seconds=40.0)
             # Check if it's time to tweet
             if (datetime.now() - self.last_tweet) > self.cadence:
                 self.tweet_something()
@@ -567,8 +572,10 @@ class Bot(object):
                             if self.test:
                                 # Put in fake results
                                 fake = result.n_tweet * (0.9 + 0.2*np.random.rand())
+                                if sentiment == 'clinton':
+                                    fake *= 2.0
                                 text = '@thebrexitbot result {} {} {}'.format(state, sentiment, fake)
-                                self.converse({'user': {'screen_name': 'j_t_allen'}, 'text': text})
+                                self.converse({'user': {'screen_name': 'j_t_allen'}, 'text': text, 'id': 123})
         db.session.commit()
         self.next_cutoff = self.get_next_cutoff()
 
